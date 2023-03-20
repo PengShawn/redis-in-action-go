@@ -29,10 +29,14 @@ func (r *Client) CheckToken(token string) string {
 
 func (r *Client) UpdateToken(token, user, item string) {
 	timestamp := time.Now().Unix()
+	// 记录令牌与已登录用户之间的关系
 	r.Conn.HSet("login:", token, user)
+	// 记录令牌最后一次出现的时间
 	r.Conn.ZAdd("recent:", &redis.Z{Score: float64(timestamp), Member: token})
 	if item != "" {
-		r.Conn.ZAdd("viewed:"+token,  &redis.Z{Score: float64(timestamp), Member: item})
+		// 记录用户浏览过的商品
+		r.Conn.ZAdd("viewed:"+token, &redis.Z{Score: float64(timestamp), Member: item})
+		// 移除旧的记录，只保留用户最近浏览的25个商品
 		r.Conn.ZRemRangeByRank("viewed:"+token, 0, -26)
 	}
 }
@@ -50,10 +54,10 @@ func (r *Client) CleanSessions() {
 
 		var sessionKey []string
 		for _, token := range tokens {
-			sessionKey = append(sessionKey, token)
+			sessionKey = append(sessionKey, token) //
 		}
 
-		r.Conn.Del(sessionKey...)
+		r.Conn.Del(sessionKey...) // TODO
 		r.Conn.HDel("login:", tokens...)
 		r.Conn.ZRem("recent:", tokens)
 	}
@@ -147,7 +151,7 @@ func (r *Client) UpdateTokenModified(token, user string, item string) {
 	r.Conn.HSet("login:", token, user)
 	r.Conn.ZAdd("recent:", &redis.Z{Score: float64(timestamp), Member: token})
 	if item != "" {
-		r.Conn.ZAdd("viewed:"+token,  &redis.Z{Score: float64(timestamp), Member: item})
+		r.Conn.ZAdd("viewed:"+token, &redis.Z{Score: float64(timestamp), Member: item})
 		r.Conn.ZRemRangeByRank("viewed:"+token, 0, -26)
 		r.Conn.ZIncrBy("viewed:", -1, item)
 	}

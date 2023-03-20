@@ -38,5 +38,15 @@ func Test(t *testing.T) {
 	for k, v := range articles {
 		t.Log(k, v)
 	}
+
+	client.ArticleDisVote("article:"+articleId, "pshawn")
+	dv, _ := client.Conn.HGet("article:"+articleId, "disvotes").Int()
+	t.Log("\nWe voted against the article, it now has disvotes: ", dv)
+	utils.AssertTrue(t, dv >= 1)
+
+	client.ExchangeVote("article:"+articleId, "pshawn")
+	dv1, _ := client.Conn.HGet("article:"+articleId, "disvotes").Int()
+	t.Log("\nWe exchanged votes for the article, it now has disvotes: ", dv1)
+	utils.AssertTrue(t, dv1 == 0)
 	defer client.Reset()
 }

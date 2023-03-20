@@ -115,3 +115,40 @@ func (r *ArticleRepo) GetGroupArticles(group, order string, page int64) []map[st
 func (r *ArticleRepo) Reset() {
 	r.Conn.FlushDB()
 }
+
+// ArticleDisVote 给文章投反对票
+func (r *ArticleRepo) ArticleDisVote(article, user string) {
+	// 文章发布一周之后，不再允许投票
+	cutoff := time.Now().Unix() - common.OneWeekInSeconds
+	if r.Conn.ZScore("time:", article).Val() < float64(cutoff) {
+		return
+	}
+
+	articleId := strings.Split(article, ":")[1]
+	if r.Conn.SAdd("disvoted:"+articleId, user).Val() != 0 {
+		r.Conn.ZIncrBy("score:", common.DisVoteScore, article) // 文章分数减少
+		r.Conn.HIncrBy(article, "disvotes", 1)                 // 文章反对票数增加
+	}
+}
+
+// ExchangeVote 对调投票和反对票
+func (r *ArticleRepo) ExchangeVote(article, user string) {
+	// 文章发布一周之后，不再允许投票
+	cutoff := time.Now().Unix() - common.OneWeekInSeconds
+	if r.Conn.ZScore("time:", article).Val() < float64(cutoff) {
+		return
+	}
+
+	articleId := strings.Split(article, ":")[1]
+	if r.Conn.SIsMember("voted:"+articleId, user).Val() {
+		r.Conn.SMove("voted:"+articleId, "disvoted:"+articleId, user)
+		r.Conn.ZIncrBy("score:", common.DisVoteScore-common.VoteScore, article) // 文章分数减少
+		r.Conn.HIncrBy(article, "disvotes", 1)                                  // 文章反对票数增加
+		r.Conn.HIncrBy(article, "votes", -1)                                    // 文章投票数减少
+	} else if r.Conn.SIsMember("disvoted:"+articleId, user).Val() {
+		r.Conn.SMove("disvoted:"+articleId, "voted:"+articleId, user)
+		r.Conn.ZIncrBy("score:", common.VoteScore-common.DisVoteScore, article) // 文章分数增加
+		r.Conn.HIncrBy(article, "votes", 1)                                     // 文章投票数增加
+		r.Conn.HIncrBy(article, "disvotes", -1)                                 // 文章反对票数减少
+	}
+}
