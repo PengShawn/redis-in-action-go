@@ -49,19 +49,19 @@ func (r *Client) CleanSessions() {
 			continue
 		}
 
-		endIndex := utils.Min(size-common.LIMIT, 100)
+		endIndex := utils.Min(size-common.LIMIT, 100) // 一次性最多删除100个令牌
 		tokens := r.Conn.ZRange("recent:", 0, endIndex-1).Val()
 
 		var sessionKey []string
 		for _, token := range tokens {
-			sessionKey = append(sessionKey, token) //
+			sessionKey = append(sessionKey, "viewed:"+token)
 		}
 
-		r.Conn.Del(sessionKey...) // TODO
+		r.Conn.Del(sessionKey...)
 		r.Conn.HDel("login:", tokens...)
 		r.Conn.ZRem("recent:", tokens)
 	}
-	defer atomic.AddInt32(&common.FLAG, -1)
+	defer atomic.AddInt32(&common.FLAG, -1) // 退出循环时，将标识减1
 }
 
 func (r *Client) AddToCart(session, item string, count int) {
@@ -153,13 +153,14 @@ func (r *Client) UpdateTokenModified(token, user string, item string) {
 	if item != "" {
 		r.Conn.ZAdd("viewed:"+token, &redis.Z{Score: float64(timestamp), Member: item})
 		r.Conn.ZRemRangeByRank("viewed:"+token, 0, -26)
-		r.Conn.ZIncrBy("viewed:", -1, item)
+		r.Conn.ZIncrBy("viewed:", -1, item) // 为什么将商品的浏览次数减1？ 为了让商品的浏览次数在有限的范围内(浏览次数越多分值越低)
 	}
 }
 
 func (r *Client) RescaleViewed() {
 	for !common.QUIT {
-		r.Conn.ZRemRangeByRank("viewed:", 20000, -1)
+		r.Conn.ZRemRangeByRank("viewed:", 20000, -1) // -1表示删除到最后一个元素
+		// 将viewed:集合中的元素的分值乘以0.5
 		r.Conn.ZInterStore("viewed:", &redis.ZStore{Weights: []float64{0.5}, Keys: []string{"viewed:"}})
 		time.Sleep(300 * time.Second)
 	}
