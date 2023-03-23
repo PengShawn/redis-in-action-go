@@ -22,7 +22,7 @@ func (r *Client) Reset() {
 	r.Conn.FlushDB()
 }
 
-func (r *Client) NotRans() {
+func (r *Client) NoTrans() {
 	fmt.Println(r.Conn.Incr("notrans: ").Val())
 	time.Sleep(100 * time.Millisecond)
 	fmt.Println(r.Conn.Decr("notrans: ").Val())
@@ -39,14 +39,18 @@ func (r *Client) Trans() {
 	}
 }
 
+// Publisher 发布订阅
 func (r *Client) Publisher(n int) {
+	// 为了让订阅者有足够的时间订阅频道，这里等待一秒钟
 	time.Sleep(1 * time.Second)
 	for n > 0 {
 		r.Conn.Publish("channel", n)
+		// 发布消息后进行短暂的休眠，让消息可以一条接一条地出现
 		n--
 	}
 }
 
+// RunPubsub 订阅
 func (r *Client) RunPubsub() {
 	pubsub := r.Conn.Subscribe("channel")
 	defer pubsub.Close()
@@ -60,7 +64,7 @@ func (r *Client) RunPubsub() {
 		switch count {
 		case 4:
 			if err := pubsub.Unsubscribe("channel"); err != nil {
-				log.Println("unsubscribe faile, err: ", err)
+				log.Println("unsubscribe fail, err: ", err)
 			} else {
 				fmt.Println("unsubscribe success")
 			}
@@ -84,6 +88,7 @@ func (r *Client) UpdateToken(token, user, item string) {
 	}
 }
 
+// ArticleVote 投票，事务
 func (r *Client) ArticleVote(article, user string) {
 	cutoff := time.Now().Unix() - common.OneWeekInSeconds
 	posted := r.Conn.ZScore("time", article).Val()
@@ -92,6 +97,7 @@ func (r *Client) ArticleVote(article, user string) {
 	}
 
 	articleId := strings.Split(article, ":")[1]
+	// 事务
 	pipeline := r.Conn.Pipeline()
 	pipeline.SAdd("voted:"+articleId, user)
 	pipeline.Expire("voted:"+articleId, time.Duration(int(posted-float64(cutoff)))*time.Second)
@@ -116,7 +122,7 @@ func (r *Client) GetArticles(page int64, order string) []map[string]string {
 	end := start + common.ArticlesPerPage - 1
 
 	ids := r.Conn.ZRevRange(order, start, end).Val()
-	articles := []map[string]string{}
+	var articles []map[string]string
 	for _, id := range ids {
 		articleData := r.Conn.HGetAll(id).Val()
 		articleData["id"] = id

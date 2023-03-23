@@ -169,14 +169,14 @@ func TestLoginCookies(t *testing.T) {
 			&redis.Z{Member: "c", Score: 3})
 		client.Conn.ZAdd("zset-2", &redis.Z{Member: "b", Score: 4}, &redis.Z{Member: "d", Score: 0},
 			&redis.Z{Member: "c", Score: 1})
-		client.Conn.ZInterStore("zset-i", &redis.ZStore{Keys:[]string{"zset-1", "zset-2"}})
+		client.Conn.ZInterStore("zset-i", &redis.ZStore{Keys: []string{"zset-1", "zset-2"}})
 		zset = client.Conn.ZRangeWithScores("zset-i", 0, -1).Val()
 		t.Log("the result of zrange: ", zset)
-		client.Conn.ZUnionStore("zset-u", &redis.ZStore{Aggregate: "min", Keys:[]string{"zset-1", "zset-2"}})
+		client.Conn.ZUnionStore("zset-u", &redis.ZStore{Aggregate: "min", Keys: []string{"zset-1", "zset-2"}})
 		zset = client.Conn.ZRangeWithScores("zset-u", 0, -1).Val()
 		t.Log("the result of zrange: ", zset)
 		client.Conn.SAdd("set-1", "a", "d")
-		client.Conn.ZUnionStore("zset-u2", &redis.ZStore{Keys:[]string{"zset-1", "zset-2"}})
+		client.Conn.ZUnionStore("zset-u2", &redis.ZStore{Keys: []string{"zset-1", "zset-2"}})
 		zset = client.Conn.ZRangeWithScores("zset-u2", 0, -1).Val()
 		t.Log("the result of zrange: ", zset)
 		defer client.Reset()
@@ -215,7 +215,7 @@ func TestLoginCookies(t *testing.T) {
 
 	t.Run("Test transaction", func(t *testing.T) {
 		for i := 0; i < 3; i++ {
-			go client.NotRans()
+			go client.NoTrans()
 		}
 		time.Sleep(500 * time.Millisecond)
 
@@ -233,4 +233,3 @@ func TestLoginCookies(t *testing.T) {
 		defer client.Reset()
 	})
 }
-
