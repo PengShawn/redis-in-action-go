@@ -232,4 +232,14 @@ func TestLoginCookies(t *testing.T) {
 		time.Sleep(1 * time.Second)
 		defer client.Reset()
 	})
+
+	t.Run("Get Articles Using Pipeline", func(t *testing.T) {
+		client.PostArticle("username", "A title", "https://www.google.com")
+		client.PostArticle("pshawn", "A title", "https://www.bing.com")
+		articles := client.GetArticles(1, "")
+		utils.AssertTrue(t, len(articles) >= 1)
+		for k, v := range articles {
+			t.Log(k, v)
+		}
+	})
 }

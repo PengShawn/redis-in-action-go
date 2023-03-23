@@ -6,6 +6,7 @@ import (
 	"log"
 	"redisInAction/Chapter03/common"
 	"redisInAction/utils"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -114,6 +115,30 @@ func (r *Client) ArticleVote(article, user string) {
 	}
 }
 
+// PostArticle 发布文章
+func (r *Client) PostArticle(user, title, link string) string {
+	articleId := strconv.Itoa(int(r.Conn.Incr("article:").Val()))
+
+	voted := "voted:" + articleId
+	r.Conn.SAdd(voted, user)                                  // 把发布者添加到已投票用户列表
+	r.Conn.Expire(voted, common.OneWeekInSeconds*time.Second) // 设置过期时间为一周
+
+	now := time.Now().Unix()
+	article := "article:" + articleId
+	r.Conn.HMSet(article, map[string]interface{}{
+		"title":  title,
+		"link":   link,
+		"poster": user,
+		"time":   now,
+		"votes":  1,
+	})
+
+	r.Conn.ZAdd("score:", &redis.Z{Score: float64(now + common.VoteScore), Member: article}) // 初始化文章分数为时间+投票分数
+	r.Conn.ZAdd("time:", &redis.Z{Score: float64(now), Member: article})                     // 初始化文章发布时间
+	return articleId
+}
+
+// GetArticles 通过事务获取一页文章
 func (r *Client) GetArticles(page int64, order string) []map[string]string {
 	if order == "" {
 		order = "score:"
@@ -122,10 +147,18 @@ func (r *Client) GetArticles(page int64, order string) []map[string]string {
 	end := start + common.ArticlesPerPage - 1
 
 	ids := r.Conn.ZRevRange(order, start, end).Val()
-	var articles []map[string]string
+	pipeline := r.Conn.Pipeline()
 	for _, id := range ids {
-		articleData := r.Conn.HGetAll(id).Val()
-		articleData["id"] = id
+		pipeline.HGetAll(id)
+	}
+	cmders, err := pipeline.Exec()
+	if err != nil {
+		log.Println("pipeline failed, the err is: ", err)
+	}
+	var articles []map[string]string
+	for _, cmder := range cmders {
+		articleData, _ := cmder.(*redis.StringStringMapCmd).Result()
+		articleData["id"] = cmder.Args()[1].(string)
 		articles = append(articles, articleData)
 	}
 	return articles
